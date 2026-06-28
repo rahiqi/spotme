@@ -1,0 +1,8 @@
+back/target/
+web/.next/
+web/node_modules/
+front/build/
+artifacts/
+.DS_Store
+*.log
+.gemini/

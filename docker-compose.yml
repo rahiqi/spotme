@@ -1,0 +1,39 @@
+services:
+  back:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - PORT=8080
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+      args:
+        - GIT_SHA=${GIT_SHA:-unknown}
+        - TIMESTAMP=${TIMESTAMP:-latest}
+    volumes:
+      - ./artifacts:/artifacts
+      - flutter-pub-cache:/root/.pub-cache
+      - gradle-cache:/root/.gradle
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+    environment:
+      - PORT=3000
+    restart: unless-stopped
+
+volumes:
+  flutter-pub-cache:
+  gradle-cache:
