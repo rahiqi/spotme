@@ -32,6 +32,11 @@ pub struct AcceptSharePayload {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RejectSharePayload {
+    pub requester_id: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct LocationUpdatePayload {
     pub latitude: f64,
     pub longitude: f64,

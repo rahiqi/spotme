@@ -12,7 +12,7 @@ use tracing::warn;
 use crate::state::AppState;
 use crate::models::{
     MessageFrame, AuthPayload, StartPresencePayload, ShareRequestPayload,
-    AcceptSharePayload, LocationUpdatePayload, EndSharePayload
+    AcceptSharePayload, RejectSharePayload, LocationUpdatePayload, EndSharePayload
 };
 
 #[derive(serde::Deserialize)]
@@ -167,6 +167,13 @@ async fn handle_ws_msg(user_id: &str, msg: Message, state: &AppState) {
                 state.accept_share(user_id.to_string(), payload.requester_id).await;
             } else {
                 warn!("Invalid accept_share payload from user {}", user_id);
+            }
+        }
+        "reject_share" => {
+            if let Ok(payload) = serde_json::from_value::<RejectSharePayload>(frame.payload) {
+                state.reject_share(user_id.to_string(), payload.requester_id).await;
+            } else {
+                warn!("Invalid reject_share payload from user {}", user_id);
             }
         }
         "location_update" => {

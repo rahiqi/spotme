@@ -255,7 +255,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               actions: [
                 OutlinedButton(
                   onPressed: () {
-                    notifier.rejectShare();
+                    notifier.rejectShare(req['requester_id']);
                     Navigator.pop(dialogContext);
                   },
                   child: const Text('Decline'),

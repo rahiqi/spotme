@@ -202,7 +202,8 @@ class SpotMeNotifier extends StateNotifier<SpotMeState> {
     state = state.copyWith(incomingRequest: null);
   }
 
-  void rejectShare() {
+  void rejectShare(String requesterId) {
+    if (_isMobile) _service.invoke('reject_share', {'requester_id': requesterId});
     state = state.copyWith(incomingRequest: null);
   }
 
@@ -522,6 +523,11 @@ void onStart(ServiceInstance service) async {
   service.on('accept_share').listen((event) {
     final requesterId = event?['requester_id'];
     sendWsMessage('accept_share', {'requester_id': requesterId});
+  });
+
+  service.on('reject_share').listen((event) {
+    final requesterId = event?['requester_id'];
+    sendWsMessage('reject_share', {'requester_id': requesterId});
   });
 
   service.on('end_share').listen((event) {

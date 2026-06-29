@@ -302,6 +302,19 @@ impl AppState {
         }
     }
 
+    pub async fn reject_share(&self, target_id: String, requester_id: String) {
+        let mut state = self.inner.write().await;
+
+        if state.pending_requests.remove(&(requester_id.clone(), target_id.clone())) {
+            let reject_frame = MessageFrame {
+                r#type: "share_rejected".to_string(),
+                payload: json!({ "partner_id": target_id.clone() }),
+            };
+            Self::send_to_user_raw(&state.connections, &requester_id, &reject_frame);
+            info!("Share request from {} to {} rejected", requester_id, target_id);
+        }
+    }
+
     pub async fn update_location(&self, user_id: String, lat: f64, lng: f64, timestamp: u64) {
         let mut state = self.inner.write().await;
 
