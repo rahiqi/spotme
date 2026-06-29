@@ -362,6 +362,46 @@ void onStart(ServiceInstance service) async {
     }
   }
 
+  void startLocationStreaming() {
+    positionSubscription?.cancel();
+    positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    ).listen((Position position) {
+      // Update foreground notification info
+      if (service is AndroidServiceInstance) {
+        service.setForegroundNotificationInfo(
+          title: "SpotMe Live",
+          content: "Broadcasting location...",
+        );
+      }
+
+      sendWsMessage('location_update', {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      });
+
+      sendWsMessage('start_presence', {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      });
+    });
+  }
+
+  void stopLocationStreaming() {
+    positionSubscription?.cancel();
+    positionSubscription = null;
+    if (service is AndroidServiceInstance) {
+      service.setForegroundNotificationInfo(
+        title: "SpotMe Online",
+        content: "$name is active",
+      );
+    }
+  }
+
   void connect() {
     if (channel != null) return;
     if (name == null || name!.isEmpty) {
@@ -399,6 +439,16 @@ void onStart(ServiceInstance service) async {
           if (type == 'auth_success') {
             userId = payload['user_id'];
             prefs.setString('user_id', userId!);
+          }
+
+          if (type == 'share_accepted') {
+            startLocationStreaming();
+          }
+
+          if (type == 'share_ended') {
+            if (!isPresenceStarted) {
+              stopLocationStreaming();
+            }
           }
 
           service.invoke(type, payload);
@@ -448,41 +498,12 @@ void onStart(ServiceInstance service) async {
   service.on('start_presence').listen((event) async {
     isPresenceStarted = true;
     connect(); // Ensure we connect if profile is now available
-    
-    positionSubscription?.cancel();
-    positionSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen((Position position) {
-      if (!isPresenceStarted) return;
-      
-      // Update foreground notification info
-      if (service is AndroidServiceInstance) {
-        service.setForegroundNotificationInfo(
-          title: "SpotMe Live",
-          content: "Broadcasting location...",
-        );
-      }
-
-      sendWsMessage('location_update', {
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      });
-
-      sendWsMessage('start_presence', {
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      });
-    });
+    startLocationStreaming();
   });
 
   service.on('stop_presence').listen((event) {
     isPresenceStarted = false;
-    positionSubscription?.cancel();
-    positionSubscription = null;
+    stopLocationStreaming();
     sendWsMessage('stop_presence', {});
     
     if (service is AndroidServiceInstance) {

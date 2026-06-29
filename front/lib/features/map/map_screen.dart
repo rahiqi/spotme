@@ -131,6 +131,93 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  Widget _buildTelegramPin(String? avatarUrl, Color color) {
+    return SizedBox(
+      width: 60,
+      height: 70,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          // Pulsing outer ring
+          Positioned(
+            top: 0,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: color.withOpacity(0.15), width: 4),
+              ),
+            ),
+          ),
+          // Rotated pointer at the bottom to form the pin triangle
+          Positioned(
+            top: 36,
+            child: Transform.rotate(
+              angle: 3.14159 / 4,
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: color,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 4,
+                      offset: const Offset(1, 1),
+                    )
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Main Avatar Circle
+          Positioned(
+            top: 2,
+            child: Container(
+              width: 46,
+              height: 46,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: AppTheme.backgroundColor,
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: avatarUrl != null && avatarUrl.isNotEmpty
+                    ? Image.network(
+                        avatarUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Icon(
+                          Icons.person,
+                          color: color,
+                          size: 24,
+                        ),
+                      )
+                    : Icon(
+                        Icons.person,
+                        color: color,
+                        size: 24,
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _centerOnLocation(double lat, double lng) {
     _mapController.move(LatLng(lat, lng), 15);
   }
@@ -185,6 +272,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           },
         );
       }
+
+      // Auto-center on partner when they publish location for the first time
+      if (previous?.partnerLatitude == null && next.partnerLatitude != null) {
+        _centerOnLocation(next.partnerLatitude!, next.partnerLongitude!);
+      }
     });
 
     // Prepare map markers
@@ -224,34 +316,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   Marker(
                     point: userLatLng,
                     width: 60,
-                    height: 60,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.3),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        Container(
-                          width: 14,
-                          height: 14,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.primaryColor,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryColor,
-                                blurRadius: 10,
-                                spreadRadius: 2,
-                              )
-                            ],
-                          ),
-                        ),
-                      ],
+                    height: 70,
+                    child: _buildTelegramPin(
+                      'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                      AppTheme.primaryColor,
                     ),
                   ),
                 );
@@ -264,36 +332,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   Marker(
                     point: partnerLatLng,
                     width: 60,
-                    height: 60,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: AppTheme.secondaryColor.withOpacity(0.2),
-                          child: CircleAvatar(
-                            radius: 16,
-                            backgroundImage: NetworkImage(state.activePartner?['partner_profile_image_url'] ?? ''),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: AppTheme.secondaryColor,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppTheme.secondaryColor,
-                                  blurRadius: 6,
-                                )
-                              ],
-                            ),
-                          ),
-                        )
-                      ],
+                    height: 70,
+                    child: _buildTelegramPin(
+                      state.activePartner?['partner_profile_image_url'] ?? state.activePartner?['profile_image_url'],
+                      AppTheme.secondaryColor,
                     ),
                   ),
                 );
