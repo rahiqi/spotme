@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM docker.arvancloud.ir/library/node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM docker.arvancloud.ir/library/node:20-alpine AS runner
 
 WORKDIR /app
 

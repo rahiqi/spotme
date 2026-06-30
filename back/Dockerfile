@@ -1,5 +1,5 @@
 # Stage 1: Build the backend
-FROM rust:1.85-slim AS builder
+FROM docker.arvancloud.ir/library/rust:1.85-slim AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Stage 2: Minimal runtime image
-FROM debian:bookworm-slim
+FROM docker.arvancloud.ir/library/debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 
