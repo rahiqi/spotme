@@ -11,6 +11,8 @@ services:
     restart: unless-stopped
 
   front:
+    profiles:
+      - build
     build:
       context: ./front
       dockerfile: Dockerfile
