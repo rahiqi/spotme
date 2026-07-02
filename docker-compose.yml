@@ -4,11 +4,31 @@ services:
       context: ./back
       dockerfile: Dockerfile
     ports:
-      - "8120:8080"
+      - "8080:8080"
     environment:
       - RUST_LOG=info
       - PORT=8080
     restart: unless-stopped
+    networks:
+      - default
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.spotme_back.rule=Host(`api.${SUBDOMAIN}.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.spotme_back.tls=true"
+      - "traefik.http.routers.spotme_back.entrypoints=websecure"
+      - "traefik.http.middlewares.spotme_back.headers.SSLRedirect=true"
+      - "traefik.http.middlewares.spotme_back.headers.STSSeconds=315360000"
+      - "traefik.http.middlewares.spotme_back.headers.browserXSSFilter=true"
+      - "traefik.http.middlewares.spotme_back.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.spotme_back.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.spotme_back.headers.SSLHost=${DOMAIN_NAME}"
+      - "traefik.http.middlewares.spotme_back.headers.STSIncludeSubdomains=true"
+      - "traefik.http.middlewares.spotme_back.headers.STSPreload=true"
+      - "traefik.http.routers.spotme_back.middlewares=spotme_back@docker"
+      - "traefik.http.routers.spotme_back.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.spotme_back.loadbalancer.server.port=8080"
 
   front:
     build:
@@ -38,7 +58,32 @@ services:
       - PORT=3000
       - UPLOAD_SECRET=${UPLOAD_SECRET:-spotme-admin-secret}
     restart: unless-stopped
+    networks:
+      - default
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_default"
+      - "traefik.http.routers.spotme_web.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.spotme_web.tls=true"
+      - "traefik.http.routers.spotme_web.entrypoints=websecure"
+      - "traefik.http.middlewares.spotme_web.headers.SSLRedirect=true"
+      - "traefik.http.middlewares.spotme_web.headers.STSSeconds=315360000"
+      - "traefik.http.middlewares.spotme_web.headers.browserXSSFilter=true"
+      - "traefik.http.middlewares.spotme_web.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.spotme_web.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.spotme_web.headers.SSLHost=${DOMAIN_NAME}"
+      - "traefik.http.middlewares.spotme_web.headers.STSIncludeSubdomains=true"
+      - "traefik.http.middlewares.spotme_web.headers.STSPreload=true"
+      - "traefik.http.routers.spotme_web.middlewares=spotme_web@docker"
+      - "traefik.http.routers.spotme_web.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.spotme_web.loadbalancer.server.port=3000"
 
 volumes:
   flutter-pub-cache:
   gradle-cache:
+
+networks:
+  default:
+  traefik_default:
+    external: true
