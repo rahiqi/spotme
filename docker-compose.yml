@@ -33,9 +33,10 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./artifacts:/app/artifacts:ro
+      - ./artifacts:/app/artifacts
     environment:
       - PORT=3000
+      - UPLOAD_SECRET=${UPLOAD_SECRET:-spotme-admin-secret}
     restart: unless-stopped
 
 volumes:
