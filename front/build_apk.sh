@@ -9,9 +9,19 @@ flutter pub get
 # Build Release APK
 flutter build apk --release
 
-# Get variables (defaulting if not passed)
+# Get variables
 GIT_SHA=${GIT_SHA:-"unknown"}
-TIMESTAMP=${TIMESTAMP:-$(date +%Y%m%d_%H%M%S)}
+TIMESTAMP=${TIMESTAMP:-"latest"}
+
+# Fallback to local git CLI if Git SHA is unknown (useful for automated stack builds like Portainer)
+if [ "${GIT_SHA}" = "unknown" ]; then
+  GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+fi
+
+# Generate dynamic timestamp if set to latest
+if [ "${TIMESTAMP}" = "latest" ]; then
+  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+fi
 
 APK_NAME="app-${GIT_SHA}-${TIMESTAMP}.apk"
 OUTPUT_PATH="/artifacts/${APK_NAME}"

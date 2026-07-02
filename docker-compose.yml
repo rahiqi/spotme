@@ -11,14 +11,13 @@ services:
     restart: unless-stopped
 
   front:
-    profiles:
-      - build
     build:
       context: ./front
       dockerfile: Dockerfile
       args:
         - GIT_SHA=${GIT_SHA:-unknown}
         - TIMESTAMP=${TIMESTAMP:-latest}
+    restart: "no"
     volumes:
       - ./artifacts:/artifacts
       - flutter-pub-cache:/root/.pub-cache
