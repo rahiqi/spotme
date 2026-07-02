@@ -17,10 +17,15 @@ export async function GET() {
       return new NextResponse('No APK release found', { status: 404 });
     }
 
-    // Filenames look like app-dca6e97-20260626_145000.apk
-    // Alphabetical sort matches timestamp sort since formatting is YYYYMMDD_HHMMSS
-    files.sort();
-    const latestFile = files[files.length - 1];
+    // Sort files by file modification time (mtime) descending
+    const filesWithStats = files.map(file => {
+      const filePath = path.join(artifactsDir, file);
+      const stats = fs.statSync(filePath);
+      return { file, mtime: stats.mtime.getTime() };
+    });
+    filesWithStats.sort((a, b) => b.mtime - a.mtime);
+
+    const latestFile = filesWithStats[0].file;
     const filePath = path.join(artifactsDir, latestFile);
 
     const fileStream = fs.readFileSync(filePath);

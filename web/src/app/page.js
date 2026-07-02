@@ -13,10 +13,18 @@ function getLatestApkInfo() {
     const files = fs.readdirSync(artifactsDir)
       .filter(f => f.startsWith('app-') && f.endsWith('.apk'));
     if (files.length === 0) return null;
-    files.sort();
-    const latestFile = files[files.length - 1];
+    
+    // Sort files by file modification time (mtime) descending
+    const filesWithStats = files.map(file => {
+      const filePath = path.join(artifactsDir, file);
+      const stats = fs.statSync(filePath);
+      return { file, mtime: stats.mtime.getTime(), stats };
+    });
+    filesWithStats.sort((a, b) => b.mtime - a.mtime);
+    
+    const latestFile = filesWithStats[0].file;
+    const stats = filesWithStats[0].stats;
     const filePath = path.join(artifactsDir, latestFile);
-    const stats = fs.statSync(filePath);
     
     const parts = latestFile.replace('.apk', '').split('-');
     const gitSha = parts[1] || 'unknown';
