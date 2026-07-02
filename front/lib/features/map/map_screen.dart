@@ -20,6 +20,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _wsController = TextEditingController();
   String _selectedAvatarSeed = "Explorer";
+  bool _showWizard = false;
 
   @override
   void initState() {
@@ -29,11 +30,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> _loadProfileSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final nameVal = prefs.getString('name') ?? '';
     setState(() {
-      _nameController.text = prefs.getString('name') ?? 'User';
+      _nameController.text = nameVal;
       _wsController.text = prefs.getString('ws_url') ?? AppConfig.defaultWsUrl;
       _selectedAvatarSeed = prefs.getString('avatar_seed') ?? 'Explorer';
+      _showWizard = nameVal.isEmpty;
     });
+    if (nameVal.isNotEmpty) {
+      _centerOnCurrentLocation();
+    }
   }
 
   Future<void> _saveProfileSettings() async {
@@ -97,15 +103,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Display Name',
                         prefixIcon: Icon(Icons.person, color: AppTheme.primaryColor),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _wsController,
-                      decoration: const InputDecoration(
-                        labelText: 'WebSocket Server URL',
-                        prefixIcon: Icon(Icons.link, color: AppTheme.primaryColor),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -219,6 +216,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
+  Future<void> _centerOnCurrentLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 5),
+      );
+      if (mounted) {
+        _mapController.move(LatLng(position.latitude, position.longitude), 15);
+      }
+    } catch (e) {
+      try {
+        final lastPosition = await Geolocator.getLastKnownPosition();
+        if (lastPosition != null && mounted) {
+          _mapController.move(LatLng(lastPosition.latitude, lastPosition.longitude), 15);
+        }
+      } catch (_) {}
+    }
+  }
+
   void _centerOnLocation(double lat, double lng) {
     _mapController.move(LatLng(lat, lng), 15);
   }
@@ -256,15 +272,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               actions: [
                 OutlinedButton(
                   onPressed: () {
-                    notifier.rejectShare(req['requester_id']);
                     Navigator.pop(dialogContext);
+                    notifier.rejectShare(req['requester_id']);
                   },
                   child: const Text('Decline'),
                 ),
                 ElevatedButton(
                   onPressed: () {
-                    notifier.acceptShare(req['requester_id']);
                     Navigator.pop(dialogContext);
+                    notifier.acceptShare(req['requester_id']);
                   },
                   child: const Text('Accept'),
                 ),
@@ -342,6 +358,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 );
               }
 
+              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+              final mapUrl = isDarkMode
+                  ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                  : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
               return FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -350,7 +371,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                    urlTemplate: mapUrl,
                     subdomains: const ['a', 'b', 'c', 'd'],
                     userAgentPackageName: 'com.spotme',
                   ),
@@ -660,6 +681,144 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
             ),
           ),
+          
+          // 4. Welcome Profile Setup Wizard Overlay
+          if (_showWizard)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withOpacity(0.85),
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Container(
+                      width: MediaQuery.of(context).size.width * 0.85,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceColor,
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.primaryColor.withOpacity(0.1),
+                            blurRadius: 30,
+                            spreadRadius: 5,
+                          )
+                        ],
+                      ),
+                      child: StatefulBuilder(
+                        builder: (context, setWizardState) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 90,
+                                height: 90,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppTheme.primaryColor, width: 2),
+                                ),
+                                child: ClipOval(
+                                  child: Image.network(
+                                    'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) => const Icon(
+                                      Icons.person,
+                                      size: 40,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton.icon(
+                                onPressed: () {
+                                  setWizardState(() {
+                                    _selectedAvatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
+                                  });
+                                },
+                                icon: const Icon(Icons.refresh, color: AppTheme.secondaryColor),
+                                label: const Text('Randomize Avatar', style: TextStyle(color: AppTheme.secondaryColor)),
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Setup Your Profile',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Input your display name to start sharing live locations anonymously.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              TextField(
+                                controller: _nameController,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: const InputDecoration(
+                                  labelText: 'Display Name',
+                                  labelStyle: TextStyle(color: Colors.grey),
+                                  prefixIcon: Icon(Icons.person, color: AppTheme.primaryColor),
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                              const SizedBox(height: 32),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryColor,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  minimumSize: const Size(double.infinity, 50),
+                                ),
+                                onPressed: () async {
+                                  final name = _nameController.text.trim();
+                                  if (name.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Please enter a display name')),
+                                    );
+                                    return;
+                                  }
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.setString('name', name);
+                                  await prefs.setString('avatar_seed', _selectedAvatarSeed);
+                                  await prefs.setString('ws_url', _wsController.text.trim());
+                                  
+                                  // Update notifier configuration
+                                  await notifier.updateProfile(
+                                    name: name,
+                                    avatarUrl: 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                                    wsUrl: _wsController.text.trim(),
+                                  );
+
+                                  setState(() {
+                                    _showWizard = false;
+                                  });
+                                  _centerOnCurrentLocation();
+                                },
+                                child: const Text(
+                                  'Get Started',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

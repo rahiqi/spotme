@@ -460,17 +460,21 @@ void onStart(ServiceInstance service) async {
       }, onDone: () {
         channel = null;
         service.invoke('ws_status', {'connected': false});
-        if (service is AndroidServiceInstance && isPresenceStarted) {
+        if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
             title: "SpotMe Disconnected",
             content: "Reconnecting...",
           );
         }
-        Future.delayed(const Duration(seconds: 5), connect);
+        Future.delayed(const Duration(seconds: 5), () {
+          connect();
+        });
       }, onError: (e) {
         channel = null;
         service.invoke('ws_status', {'connected': false});
-        Future.delayed(const Duration(seconds: 5), connect);
+        Future.delayed(const Duration(seconds: 5), () {
+          connect();
+        });
       });
     } catch (e) {
       channel = null;
