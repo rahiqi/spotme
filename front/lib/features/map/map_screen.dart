@@ -9,6 +9,7 @@ import 'package:spotme/features/location/location_service.dart';
 import 'package:spotme/core/config.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
+import 'package:spotme/features/auth/telegram_login_screen.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -94,6 +95,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _handleTelegramLogin(setDialogState),
+                      icon: const Icon(Icons.telegram, color: Color(0xFF229ED9)),
+                      label: const Text('Sync with Telegram'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF229ED9),
+                        side: const BorderSide(color: Color(0xFF229ED9)),
+                        minimumSize: const Size(double.infinity, 44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     CircleAvatar(
                       radius: 40,
                       backgroundColor: AppTheme.surfaceColor,
@@ -295,6 +310,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     } catch (e) {
       debugPrint("Error picking avatar: $e");
+    }
+  }
+
+  Future<void> _handleTelegramLogin(StateSetter setDialogState) async {
+    String wsUrl = _wsController.text.trim();
+    String authUrl = 'http://10.0.2.2:3000/auth/telegram';
+    if (!wsUrl.contains('10.0.2.2') && !wsUrl.contains('localhost')) {
+      authUrl = wsUrl
+          .replaceFirst('wss://api.', 'https://')
+          .replaceFirst('ws://api.', 'http://')
+          .replaceFirst('/ws', '/auth/telegram');
+    }
+
+    final result = await Navigator.push<Map<String, String>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TelegramLoginScreen(loginUrl: authUrl),
+      ),
+    );
+
+    if (result != null) {
+      final name = result['name'];
+      final photoUrl = result['photo_url'];
+      if (name != null && name.isNotEmpty) {
+        setDialogState(() {
+          _nameController.text = name;
+          if (photoUrl != null && photoUrl.isNotEmpty) {
+            _selectedAvatarSeed = "custom";
+            _tempCustomAvatarBase64 = photoUrl;
+          }
+        });
+      }
     }
   }
 
@@ -874,25 +921,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 24),
-                              const Text(
-                                'Setup Your Profile',
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                              const SizedBox(height: 32),
+                              ElevatedButton.icon(
+                                onPressed: () => _handleTelegramLogin(setWizardState),
+                                icon: const Icon(Icons.telegram, color: Colors.white),
+                                label: const Text('Login with Telegram'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF229ED9),
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Input your display name to start sharing live locations anonymously.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
+                              const SizedBox(height: 20),
+                              const Row(
+                                children: [
+                                  Expanded(child: Divider(color: Colors.white10)),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 12),
+                                    child: Text('OR', style: TextStyle(color: Colors.grey, fontSize: 10)),
+                                  ),
+                                  Expanded(child: Divider(color: Colors.white10)),
+                                ],
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 20),
                               TextField(
                                 controller: _nameController,
                                 style: const TextStyle(color: Colors.white),

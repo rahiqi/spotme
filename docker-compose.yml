@@ -58,6 +58,7 @@ services:
       - PORT=3000
       - UPLOAD_SECRET=${UPLOAD_SECRET:-spotme-admin-secret}
       - BACKEND_URL=http://back:8080
+      - NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=${TELEGRAM_BOT_USERNAME:-SpotMeAuthBot}
     restart: unless-stopped
     networks:
       - default
