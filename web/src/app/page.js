@@ -65,8 +65,19 @@ export default function Home() {
       <header className="sticky top-0 z-50 w-full border-b border-neutral-900 bg-black/60 backdrop-blur-lg">
         <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-              <span className="font-bold text-white text-sm tracking-wider">SM</span>
+            <div className="w-8 h-8">
+              <svg className="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100" height="100" rx="24" fill="#0D0D11" />
+                <circle cx="50" cy="46" r="28" stroke="white" strokeWidth="1.5" strokeOpacity="0.1" />
+                <circle cx="50" cy="46" r="20" stroke="#00F2FE" strokeWidth="2" strokeOpacity="0.3" />
+                <path d="M50 26 C43 26 37 32 37 39 C37 49 50 64 50 64 C50 64 63 49 63 39 C63 32 57 26 50 26 Z M50 44 C47 44 45 42 45 39 C45 36 47 34 50 34 C53 34 55 36 55 39 C55 42 53 44 50 44 Z" fill="url(#headerPinGrad)" />
+                <defs>
+                  <linearGradient id="headerPinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#00F2FE" />
+                    <stop offset="100%" stopColor="#4FACFE" />
+                  </linearGradient>
+                </defs>
+              </svg>
             </div>
             <span className="font-bold text-lg text-white tracking-tight">SpotMe</span>
           </div>
