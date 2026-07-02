@@ -33,6 +33,10 @@ OUTPUT_PATH="/artifacts/${APK_NAME}"
 # Ensure output directory exists
 mkdir -p /artifacts
 
+# Clean up older APKs to save disk space
+echo "Cleaning up older APK builds..."
+rm -f /artifacts/app-*.apk
+
 # Copy and rename the built APK
 cp build/app/outputs/flutter-apk/app-release.apk "${OUTPUT_PATH}"
 
