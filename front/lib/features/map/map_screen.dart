@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotme/core/theme.dart';
 import 'package:spotme/features/location/location_service.dart';
 import 'package:spotme/core/config.dart';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -20,7 +22,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _wsController = TextEditingController();
   String _selectedAvatarSeed = "Explorer";
+  String? _tempCustomAvatarBase64;
   bool _showWizard = false;
+  String _mapThemePref = 'system';
 
   @override
   void initState() {
@@ -31,11 +35,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Future<void> _loadProfileSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final nameVal = prefs.getString('name') ?? '';
+    final avatarUrl = prefs.getString('avatar_url') ?? '';
     setState(() {
       _nameController.text = nameVal;
       _wsController.text = prefs.getString('ws_url') ?? AppConfig.defaultWsUrl;
       _selectedAvatarSeed = prefs.getString('avatar_seed') ?? 'Explorer';
       _showWizard = nameVal.isEmpty;
+      _mapThemePref = prefs.getString('map_theme') ?? 'system';
+      if (avatarUrl.startsWith('data:image/')) {
+        _tempCustomAvatarBase64 = avatarUrl;
+        _selectedAvatarSeed = "custom";
+      }
     });
     if (nameVal.isNotEmpty) {
       _centerOnCurrentLocation();
@@ -45,13 +55,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   Future<void> _saveProfileSettings() async {
     final name = _nameController.text.trim();
     final wsUrl = _wsController.text.trim();
-    if (name.isEmpty || wsUrl.isEmpty) return;
+    final avatarUrl = _selectedAvatarSeed == "custom"
+        ? (_tempCustomAvatarBase64 ?? '')
+        : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed';
 
-    final avatarUrl = 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed';
-    
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('name', name);
+    await prefs.setString('ws_url', wsUrl);
     await prefs.setString('avatar_seed', _selectedAvatarSeed);
+    await prefs.setString('avatar_url', avatarUrl);
 
+    // Update notifier configuration
     await ref.read(spotMeProvider.notifier).updateProfile(
       name: name,
       avatarUrl: avatarUrl,
@@ -83,19 +97,38 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     CircleAvatar(
                       radius: 40,
                       backgroundColor: AppTheme.surfaceColor,
-                      backgroundImage: NetworkImage(
-                        'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                      backgroundImage: _getAvatarProvider(
+                        _selectedAvatarSeed == "custom"
+                            ? (_tempCustomAvatarBase64 ?? '')
+                            : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed'
                       ),
+                      child: _getAvatarProvider(
+                        _selectedAvatarSeed == "custom"
+                            ? (_tempCustomAvatarBase64 ?? '')
+                            : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed'
+                      ) == null ? const Icon(Icons.person, size: 40) : null,
                     ),
                     const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () {
-                        setDialogState(() {
-                          _selectedAvatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
-                        });
-                      },
-                      icon: const Icon(Icons.refresh, color: AppTheme.secondaryColor),
-                      label: const Text('Randomize Avatar', style: TextStyle(color: AppTheme.secondaryColor)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () {
+                            setDialogState(() {
+                              _selectedAvatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
+                              _tempCustomAvatarBase64 = null;
+                            });
+                          },
+                          icon: const Icon(Icons.refresh, color: AppTheme.secondaryColor),
+                          label: const Text('Randomize Robot', style: TextStyle(color: AppTheme.secondaryColor, fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton.icon(
+                          onPressed: () => _pickCustomAvatar(setDialogState),
+                          icon: const Icon(Icons.photo_library, color: AppTheme.primaryColor),
+                          label: const Text('Upload Photo', style: TextStyle(color: AppTheme.primaryColor, fontSize: 12)),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -193,27 +226,76 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   shape: BoxShape.circle,
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: avatarUrl != null && avatarUrl.isNotEmpty
-                    ? Image.network(
-                        avatarUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Icon(
-                          Icons.person,
-                          color: color,
-                          size: 24,
-                        ),
-                      )
-                    : Icon(
-                        Icons.person,
-                        color: color,
-                        size: 24,
-                      ),
+                child: _buildAvatarImage(avatarUrl, color, 24),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  ImageProvider? _getAvatarProvider(String? url) {
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+    if (url.startsWith('data:image/')) {
+      try {
+        final base64Data = url.split(',')[1];
+        return MemoryImage(base64Decode(base64Data));
+      } catch (_) {
+        return null;
+      }
+    }
+    return NetworkImage(url);
+  }
+
+  Widget _buildAvatarImage(String? avatarUrl, Color fallbackColor, double iconSize) {
+    if (avatarUrl == null || avatarUrl.isEmpty) {
+      return Icon(Icons.person, color: fallbackColor, size: iconSize);
+    }
+    if (avatarUrl.startsWith('data:image/')) {
+      try {
+        final base64Data = avatarUrl.split(',')[1];
+        return Image.memory(
+          base64Decode(base64Data),
+          fit: BoxFit.cover,
+        );
+      } catch (_) {
+        return Icon(Icons.person, color: fallbackColor, size: iconSize);
+      }
+    }
+    return Image.network(
+      avatarUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Icon(
+        Icons.person,
+        color: fallbackColor,
+        size: iconSize,
+      ),
+    );
+  }
+
+  Future<void> _pickCustomAvatar(StateSetter setDialogState) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 150,
+        maxHeight: 150,
+        imageQuality: 80,
+      );
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        final base64Str = base64Encode(bytes);
+        setDialogState(() {
+          _selectedAvatarSeed = "custom";
+          _tempCustomAvatarBase64 = "data:image/jpeg;base64,$base64Str";
+        });
+      }
+    } catch (e) {
+      debugPrint("Error picking avatar: $e");
+    }
   }
 
   Future<void> _centerOnCurrentLocation() async {
@@ -259,7 +341,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 children: [
                   CircleAvatar(
                     radius: 36,
-                    backgroundImage: NetworkImage(req['requester_profile_image_url'] ?? ''),
+                    backgroundImage: _getAvatarProvider(req['requester_profile_image_url'] ?? ''),
+                    child: _getAvatarProvider(req['requester_profile_image_url'] ?? '') == null
+                        ? const Icon(Icons.person)
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -358,7 +443,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 );
               }
 
-              final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+              final isDarkMode = _mapThemePref == 'dark' || 
+                  (_mapThemePref == 'system' && Theme.of(context).brightness == Brightness.dark);
               final mapUrl = isDarkMode
                   ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
                   : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
@@ -446,9 +532,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     child: CircleAvatar(
                       radius: 20,
                       backgroundColor: AppTheme.surfaceColor,
-                      backgroundImage: NetworkImage(
-                        'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                      backgroundImage: _getAvatarProvider(
+                        _selectedAvatarSeed == "custom"
+                            ? (_tempCustomAvatarBase64 ?? '')
+                            : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed'
                       ),
+                      child: _getAvatarProvider(
+                        _selectedAvatarSeed == "custom"
+                            ? (_tempCustomAvatarBase64 ?? '')
+                            : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed'
+                      ) == null ? const Icon(Icons.person) : null,
                     ),
                   ),
                 ),
@@ -500,7 +593,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               child: CircleAvatar(
                                 radius: 22,
                                 backgroundColor: AppTheme.backgroundColor,
-                                backgroundImage: NetworkImage(user['profile_image_url'] ?? ''),
+                                backgroundImage: _getAvatarProvider(user['profile_image_url'] ?? ''),
+                                child: _getAvatarProvider(user['profile_image_url'] ?? '') == null
+                                    ? const Icon(Icons.person)
+                                    : null,
                               ),
                             ),
                           ),
@@ -540,7 +636,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         children: [
                           CircleAvatar(
                             radius: 26,
-                            backgroundImage: NetworkImage(state.activePartner?['partner_profile_image_url'] ?? ''),
+                            backgroundImage: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? ''),
+                            child: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? '') == null
+                                ? const Icon(Icons.person)
+                                : null,
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -590,12 +689,39 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Map Centering Button
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 12.0),
-                             child: FloatingActionButton(
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            FloatingActionButton(
+                              heroTag: 'mapThemeBtn',
+                              onPressed: () async {
+                                final prefs = await SharedPreferences.getInstance();
+                                String nextTheme = 'system';
+                                if (_mapThemePref == 'system') {
+                                  nextTheme = 'light';
+                                } else if (_mapThemePref == 'light') {
+                                  nextTheme = 'dark';
+                                } else {
+                                  nextTheme = 'system';
+                                }
+                                await prefs.setString('map_theme', nextTheme);
+                                setState(() {
+                                  _mapThemePref = nextTheme;
+                                });
+                              },
+                              backgroundColor: AppTheme.surfaceColor,
+                              foregroundColor: AppTheme.primaryColor,
+                              shape: const CircleBorder(),
+                              child: Icon(
+                                _mapThemePref == 'system'
+                                    ? Icons.brightness_auto
+                                    : _mapThemePref == 'light'
+                                        ? Icons.light_mode
+                                        : Icons.dark_mode,
+                              ),
+                            ),
+                            FloatingActionButton(
+                              heroTag: 'centerLocBtn',
                               onPressed: () async {
                                 if (await notifier.requestLocationPermission()) {
                                   try {
@@ -627,7 +753,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               shape: const CircleBorder(),
                               child: const Icon(Icons.my_location),
                             ),
-                          ),
+                          ],
                         ),
                         // Start Presence Button
                         GestureDetector(
@@ -717,25 +843,36 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   border: Border.all(color: AppTheme.primaryColor, width: 2),
                                 ),
                                 child: ClipOval(
-                                  child: Image.network(
-                                    'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) => const Icon(
-                                      Icons.person,
-                                      size: 40,
-                                    ),
+                                  child: _buildAvatarImage(
+                                    _selectedAvatarSeed == "custom"
+                                        ? (_tempCustomAvatarBase64 ?? '')
+                                        : 'https://api.dicebear.com/7.x/bottts/png?seed=$_selectedAvatarSeed',
+                                    Colors.grey,
+                                    40,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              TextButton.icon(
-                                onPressed: () {
-                                  setWizardState(() {
-                                    _selectedAvatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
-                                  });
-                                },
-                                icon: const Icon(Icons.refresh, color: AppTheme.secondaryColor),
-                                label: const Text('Randomize Avatar', style: TextStyle(color: AppTheme.secondaryColor)),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setWizardState(() {
+                                        _selectedAvatarSeed = DateTime.now().millisecondsSinceEpoch.toString();
+                                        _tempCustomAvatarBase64 = null;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.refresh, color: AppTheme.secondaryColor),
+                                    label: const Text('Randomize Robot', style: TextStyle(color: AppTheme.secondaryColor, fontSize: 12)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  TextButton.icon(
+                                    onPressed: () => _pickCustomAvatar(setWizardState),
+                                    icon: const Icon(Icons.photo_library, color: AppTheme.primaryColor),
+                                    label: const Text('Upload Photo', style: TextStyle(color: AppTheme.primaryColor, fontSize: 12)),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 24),
                               const Text(
