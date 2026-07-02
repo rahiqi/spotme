@@ -5,9 +5,6 @@ WORKDIR /app
 # Copy all project files
 COPY . .
 
-# Setup global Gradle mirror configuration
-RUN mkdir -p /root/.gradle && cp init.gradle /root/.gradle/init.gradle
-
 # Make the build script executable
 RUN chmod +x build_apk.sh
 

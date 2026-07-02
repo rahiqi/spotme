@@ -3,6 +3,10 @@ set -e
 
 echo "Starting Flutter APK build inside Docker..."
 
+# Copy global init.gradle to the mounted volume at runtime (prevents volume shadowing)
+mkdir -p /root/.gradle
+cp init.gradle /root/.gradle/init.gradle
+
 # Run flutter pub get
 flutter pub get
 
