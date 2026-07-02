@@ -1,0 +1,38 @@
+allprojects {
+    buildscript {
+        repositories {
+            all { ArtifactRepository repo ->
+                if (repo instanceof MavenArtifactRepository) {
+                    def url = repo.url.toString()
+                    if (url.startsWith("https://dl.google.com") || url.startsWith("http://dl.google.com")) {
+                        project.logger.lifecycle("Redirecting Google repository $url to Aliyun mirror")
+                        repo.url = "https://maven.aliyun.com/repository/google"
+                    } else if (url.startsWith("https://repo.maven.apache.org") || url.startsWith("https://repo1.maven.org") || url.startsWith("https://jcenter.bintray.com")) {
+                        project.logger.lifecycle("Redirecting Central repository $url to Aliyun mirror")
+                        repo.url = "https://maven.aliyun.com/repository/public"
+                    } else if (url.startsWith("https://plugins.gradle.org")) {
+                        project.logger.lifecycle("Redirecting Gradle Plugins repository $url to Aliyun mirror")
+                        repo.url = "https://maven.aliyun.com/repository/gradle-plugin"
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        all { ArtifactRepository repo ->
+            if (repo instanceof MavenArtifactRepository) {
+                def url = repo.url.toString()
+                if (url.startsWith("https://dl.google.com") || url.startsWith("http://dl.google.com")) {
+                    project.logger.lifecycle("Redirecting Google repository $url to Aliyun mirror")
+                    repo.url = "https://maven.aliyun.com/repository/google"
+                } else if (url.startsWith("https://repo.maven.apache.org") || url.startsWith("https://repo1.maven.org") || url.startsWith("https://jcenter.bintray.com")) {
+                    project.logger.lifecycle("Redirecting Central repository $url to Aliyun mirror")
+                    repo.url = "https://maven.aliyun.com/repository/public"
+                } else if (url.startsWith("https://plugins.gradle.org")) {
+                    project.logger.lifecycle("Redirecting Gradle Plugins repository $url to Aliyun mirror")
+                    repo.url = "https://maven.aliyun.com/repository/gradle-plugin"
+                }
+            }
+        }
+    }
+}
