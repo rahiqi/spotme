@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:spotme/core/config.dart';
 
 // State definition
 class SpotMeState {
@@ -347,7 +348,7 @@ void onStart(ServiceInstance service) async {
   StreamSubscription<Position>? positionSubscription;
   bool isPresenceStarted = false;
 
-  String wsUrl = prefs.getString('ws_url') ?? 'ws://10.0.2.2:8080/ws';
+  String wsUrl = prefs.getString('ws_url') ?? AppConfig.defaultWsUrl;
   String? userId = prefs.getString('user_id');
   String? name = prefs.getString('name');
   String? avatarUrl = prefs.getString('avatar_url');

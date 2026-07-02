@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotme/core/theme.dart';
 import 'package:spotme/features/location/location_service.dart';
+import 'package:spotme/core/config.dart';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -30,7 +31,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _nameController.text = prefs.getString('name') ?? 'User';
-      _wsController.text = prefs.getString('ws_url') ?? 'ws://10.0.2.2:8080/ws';
+      _wsController.text = prefs.getString('ws_url') ?? AppConfig.defaultWsUrl;
       _selectedAvatarSeed = prefs.getString('avatar_seed') ?? 'Explorer';
     });
   }
