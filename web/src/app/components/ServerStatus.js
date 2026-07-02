@@ -8,7 +8,7 @@ export default function ServerStatus() {
   useEffect(() => {
     async function checkStatus() {
       try {
-        const res = await fetch('http://localhost:8080/health', { mode: 'cors' });
+        const res = await fetch('/api/health');
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'healthy') {

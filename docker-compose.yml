@@ -57,6 +57,7 @@ services:
     environment:
       - PORT=3000
       - UPLOAD_SECRET=${UPLOAD_SECRET:-spotme-admin-secret}
+      - BACKEND_URL=http://back:8080
     restart: unless-stopped
     networks:
       - default
