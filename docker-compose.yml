@@ -5,9 +5,12 @@ services:
       dockerfile: Dockerfile
     #ports:
     #  - "8080:8080"
+    volumes:
+      - back-data:/app/data
     environment:
       - RUST_LOG=info
       - PORT=8080
+      - DATABASE_PATH=/app/data/spotme.db
     restart: unless-stopped
     networks:
       - default
@@ -84,6 +87,7 @@ services:
 volumes:
   flutter-pub-cache:
   gradle-cache:
+  back-data:
 
 networks:
   default:

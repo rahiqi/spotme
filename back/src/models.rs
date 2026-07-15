@@ -102,3 +102,32 @@ pub struct LocationStreamPayload {
 pub struct ShareEndedPayload {
     pub partner_id: String,
 }
+
+// Chat Feature Payloads
+
+#[derive(Debug, Deserialize)]
+pub struct SendChatPayload {
+    pub receiver_id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ChatMessagePayload {
+    pub id: String,
+    pub sender_id: String,
+    pub receiver_id: String,
+    pub content: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetChatHistoryPayload {
+    pub partner_id: String,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ChatHistoryPayload {
+    pub partner_id: String,
+    pub messages: Vec<ChatMessagePayload>,
+}

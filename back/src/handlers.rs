@@ -12,7 +12,8 @@ use tracing::warn;
 use crate::state::AppState;
 use crate::models::{
     MessageFrame, AuthPayload, StartPresencePayload, ShareRequestPayload,
-    AcceptSharePayload, RejectSharePayload, LocationUpdatePayload, EndSharePayload
+    AcceptSharePayload, RejectSharePayload, LocationUpdatePayload, EndSharePayload,
+    SendChatPayload, GetChatHistoryPayload
 };
 
 #[derive(serde::Deserialize)]
@@ -188,6 +189,21 @@ async fn handle_ws_msg(user_id: &str, msg: Message, state: &AppState) {
                 state.end_share(user_id.to_string(), payload.target_id).await;
             } else {
                 warn!("Invalid end_share payload from user {}", user_id);
+            }
+        }
+        "send_chat" => {
+            if let Ok(payload) = serde_json::from_value::<SendChatPayload>(frame.payload) {
+                state.send_chat_message(user_id.to_string(), payload.receiver_id, payload.content).await;
+            } else {
+                warn!("Invalid send_chat payload from user {}", user_id);
+            }
+        }
+        "get_chat_history" => {
+            if let Ok(payload) = serde_json::from_value::<GetChatHistoryPayload>(frame.payload) {
+                let limit = payload.limit.unwrap_or(50);
+                state.fetch_chat_history(user_id.to_string(), payload.partner_id, limit).await;
+            } else {
+                warn!("Invalid get_chat_history payload from user {}", user_id);
             }
         }
         _ => {

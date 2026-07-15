@@ -14,6 +14,43 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:spotme/core/config.dart';
 
+// Chat Message Model
+class ChatMessage {
+  final String id;
+  final String senderId;
+  final String receiverId;
+  final String content;
+  final int timestamp; // Milliseconds since epoch
+
+  ChatMessage({
+    required this.id,
+    required this.senderId,
+    required this.receiverId,
+    required this.content,
+    required this.timestamp,
+  });
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: json['id'] ?? '',
+      senderId: json['sender_id'] ?? '',
+      receiverId: json['receiver_id'] ?? '',
+      content: json['content'] ?? '',
+      timestamp: (json['timestamp'] ?? 0) as int,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'sender_id': senderId,
+      'receiver_id': receiverId,
+      'content': content,
+      'timestamp': timestamp,
+    };
+  }
+}
+
 // State definition
 class SpotMeState {
   final bool isConnected;
@@ -25,6 +62,9 @@ class SpotMeState {
   final bool isSharing;
   final Map<String, dynamic>? incomingRequest;
   final bool isPresenceOnline;
+  final List<ChatMessage> chatMessages;
+  final bool hasUnreadMessages;
+  final bool isChatOpen;
 
   SpotMeState({
     this.isConnected = false,
@@ -36,6 +76,9 @@ class SpotMeState {
     this.isSharing = false,
     this.incomingRequest,
     this.isPresenceOnline = false,
+    this.chatMessages = const [],
+    this.hasUnreadMessages = false,
+    this.isChatOpen = false,
   });
 
   SpotMeState copyWith({
@@ -48,6 +91,9 @@ class SpotMeState {
     bool? isSharing,
     Map<String, dynamic>? incomingRequest,
     bool? isPresenceOnline,
+    List<ChatMessage>? chatMessages,
+    bool? hasUnreadMessages,
+    bool? isChatOpen,
   }) {
     return SpotMeState(
       isConnected: isConnected ?? this.isConnected,
@@ -59,6 +105,9 @@ class SpotMeState {
       isSharing: isSharing ?? this.isSharing,
       incomingRequest: incomingRequest ?? this.incomingRequest,
       isPresenceOnline: isPresenceOnline ?? this.isPresenceOnline,
+      chatMessages: chatMessages ?? this.chatMessages,
+      hasUnreadMessages: hasUnreadMessages ?? this.hasUnreadMessages,
+      isChatOpen: isChatOpen ?? this.isChatOpen,
     );
   }
 }
@@ -77,6 +126,8 @@ class SpotMeNotifier extends StateNotifier<SpotMeState> {
   StreamSubscription? _acceptedSub;
   StreamSubscription? _streamSub;
   StreamSubscription? _endedSub;
+  StreamSubscription? _chatMessageSub;
+  StreamSubscription? _chatHistorySub;
 
   SpotMeNotifier() : super(SpotMeState()) {
     _initListeners();
@@ -116,11 +167,13 @@ class SpotMeNotifier extends StateNotifier<SpotMeState> {
     });
 
     _acceptedSub = _service.on('share_accepted').listen((event) {
+      if (event == null) return;
       state = state.copyWith(
         activePartner: event,
         isSharing: true,
         incomingRequest: null,
       );
+      getChatHistory(event['partner_id']);
     });
 
     _streamSub = _service.on('location_stream').listen((event) {
@@ -137,8 +190,75 @@ class SpotMeNotifier extends StateNotifier<SpotMeState> {
         partnerLatitude: null,
         partnerLongitude: null,
         isSharing: false,
+        chatMessages: const [],
+        hasUnreadMessages: false,
+        isChatOpen: false,
       );
     });
+
+    _chatMessageSub = _service.on('chat_message').listen((event) {
+      if (event == null) return;
+      final msg = ChatMessage.fromJson(Map<String, dynamic>.from(event));
+      final updatedList = List<ChatMessage>.from(state.chatMessages)..add(msg);
+      state = state.copyWith(
+        chatMessages: updatedList,
+        hasUnreadMessages: !state.isChatOpen,
+      );
+    });
+
+    _chatHistorySub = _service.on('chat_history').listen((event) {
+      if (event == null) return;
+      final list = (event['messages'] as List?) ?? [];
+      final messages = list
+          .map((m) => ChatMessage.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+      state = state.copyWith(
+        chatMessages: messages,
+      );
+    });
+  }
+
+  void sendChatMessage(String content) {
+    final partner = state.activePartner;
+    final selfId = state.userId;
+    if (partner == null || selfId == null || content.trim().isEmpty) return;
+
+    final receiverId = partner['partner_id'];
+    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    final localMsg = ChatMessage(
+      id: tempId,
+      senderId: selfId,
+      receiverId: receiverId,
+      content: content,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    state = state.copyWith(
+      chatMessages: List<ChatMessage>.from(state.chatMessages)..add(localMsg),
+    );
+
+    if (_isMobile) {
+      _service.invoke('send_chat', {
+        'receiver_id': receiverId,
+        'content': content,
+      });
+    }
+  }
+
+  void getChatHistory(String partnerId) {
+    if (_isMobile) {
+      _service.invoke('get_chat_history', {
+        'partner_id': partnerId,
+        'limit': 50,
+      });
+    }
+  }
+
+  void setChatOpen(bool isOpen) {
+    state = state.copyWith(
+      isChatOpen: isOpen,
+      hasUnreadMessages: isOpen ? false : state.hasUnreadMessages,
+    );
   }
 
   Future<void> updateProfile({required String name, required String avatarUrl, required String wsUrl}) async {
@@ -252,6 +372,8 @@ class SpotMeNotifier extends StateNotifier<SpotMeState> {
     _acceptedSub?.cancel();
     _streamSub?.cancel();
     _endedSub?.cancel();
+    _chatMessageSub?.cancel();
+    _chatHistorySub?.cancel();
     super.dispose();
   }
 }
@@ -538,5 +660,27 @@ void onStart(ServiceInstance service) async {
   service.on('end_share').listen((event) {
     final targetId = event?['target_id'];
     sendWsMessage('end_share', {'target_id': targetId});
+  });
+
+  service.on('send_chat').listen((event) {
+    final receiverId = event?['receiver_id'];
+    final content = event?['content'];
+    if (receiverId != null && content != null) {
+      sendWsMessage('send_chat', {
+        'receiver_id': receiverId,
+        'content': content,
+      });
+    }
+  });
+
+  service.on('get_chat_history').listen((event) {
+    final partnerId = event?['partner_id'];
+    final limit = event?['limit'];
+    if (partnerId != null) {
+      sendWsMessage('get_chat_history', {
+        'partner_id': partnerId,
+        'limit': limit,
+      });
+    }
   });
 }

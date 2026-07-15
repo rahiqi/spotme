@@ -9,6 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod models;
 mod state;
 mod handlers;
+mod db;
 
 use state::AppState;
 
@@ -23,7 +24,10 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let state = AppState::new();
+    let db_path = std::env::var("DATABASE_PATH")
+        .unwrap_or_else(|_| "spotme.db".to_string());
+    let db = db::Db::new(&db_path);
+    let state = AppState::new(db);
 
     // Set up CORS
     let cors = CorsLayer::permissive();

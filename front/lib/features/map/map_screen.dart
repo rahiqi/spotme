@@ -10,6 +10,7 @@ import 'package:spotme/core/config.dart';
 import 'dart:convert';
 import 'package:image_picker/image_picker.dart';
 import 'package:spotme/features/auth/telegram_login_screen.dart';
+import 'dart:ui';
 
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
@@ -26,11 +27,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String? _tempCustomAvatarBase64;
   bool _showWizard = false;
   String _mapThemePref = 'system';
+  bool _isChatPanelOpen = false;
+  final TextEditingController _chatInputController = TextEditingController();
+  final ScrollController _chatScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadProfileSettings();
+  }
+
+  @override
+  void dispose() {
+    _chatInputController.dispose();
+    _chatScrollController.dispose();
+    _nameController.dispose();
+    _wsController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfileSettings() async {
@@ -664,75 +677,100 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 300),
               child: state.isSharing
-                  ? Container(
-                      key: const ValueKey('active_share_card'),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceColor.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withOpacity(0.15),
-                            blurRadius: 20,
-                            spreadRadius: 2,
-                          )
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 26,
-                            backgroundImage: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? ''),
-                            child: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? '') == null
-                                ? const Icon(Icons.person)
-                                : null,
+                  ? (_isChatPanelOpen
+                      ? _buildChatPanel(state, notifier)
+                      : Container(
+                          key: const ValueKey('active_share_card'),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceColor.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: AppTheme.primaryColor.withOpacity(0.3)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.primaryColor.withOpacity(0.15),
+                                blurRadius: 20,
+                                spreadRadius: 2,
+                              )
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'Live Sharing Active',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: AppTheme.secondaryColor,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundImage: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? ''),
+                                child: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? '') == null
+                                    ? const Icon(Icons.person)
+                                    : null,
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Live Sharing Active',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.secondaryColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      state.activePartner?['partner_name'] ?? 'Partner',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  state.activePartner?['partner_name'] ?? 'Partner',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  if (state.partnerLatitude != null && state.partnerLongitude != null) {
+                                    _centerOnLocation(state.partnerLatitude!, state.partnerLongitude!);
+                                  }
+                                },
+                                icon: const Icon(Icons.gps_fixed, color: AppTheme.primaryColor),
+                              ),
+                              const SizedBox(width: 4),
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  IconButton(
+                                    onPressed: () => _openChatPanel(),
+                                    icon: const Icon(Icons.chat_bubble_outline, color: AppTheme.primaryColor),
                                   ),
+                                  if (state.hasUnreadMessages)
+                                    Positioned(
+                                      right: 6,
+                                      top: 6,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () => notifier.endShare(),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.accentColor,
+                                  shadowColor: AppTheme.accentColor.withOpacity(0.4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                                 ),
-                              ],
-                            ),
+                                child: const Text('End'),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            onPressed: () {
-                              if (state.partnerLatitude != null && state.partnerLongitude != null) {
-                                _centerOnLocation(state.partnerLatitude!, state.partnerLongitude!);
-                              }
-                            },
-                            icon: const Icon(Icons.gps_fixed, color: AppTheme.primaryColor),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () => notifier.endShare(),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.accentColor,
-                              shadowColor: AppTheme.accentColor.withOpacity(0.4),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            ),
-                            child: const Text('End'),
-                          ),
-                        ],
-                      ),
-                    )
+                        ))
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1013,5 +1051,234 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ],
       ),
     );
+  }
+
+  // --- Chat Panel Implementation ---
+
+  Widget _buildChatPanel(SpotMeState state, SpotMeNotifier notifier) {
+    return Container(
+      key: const ValueKey('chat_panel_card'),
+      height: MediaQuery.of(context).size.height * 0.45,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppTheme.primaryColor.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 20,
+            spreadRadius: 2,
+          )
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Column(
+          children: [
+            // Chat Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.06))),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundImage: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? ''),
+                    child: _getAvatarProvider(state.activePartner?['partner_profile_image_url'] ?? '') == null
+                        ? const Icon(Icons.person, size: 16)
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          state.activePartner?['partner_name'] ?? 'Partner',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                        const Text(
+                          'Live Chat',
+                          style: TextStyle(color: AppTheme.secondaryColor, fontSize: 10, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white60, size: 18),
+                    onPressed: () {
+                      setState(() {
+                        _isChatPanelOpen = false;
+                      });
+                      notifier.setChatOpen(false);
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // Chat Messages list
+            Expanded(
+              child: state.chatMessages.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline, color: Colors.white24, size: 30),
+                          SizedBox(height: 8),
+                          Text(
+                            'No messages yet',
+                            style: TextStyle(color: Colors.white24, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _chatScrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      itemCount: state.chatMessages.length,
+                      itemBuilder: (context, index) {
+                        final msg = state.chatMessages[index];
+                        final isSelf = msg.senderId == state.userId;
+                        return _buildChatBubble(msg, isSelf);
+                      },
+                    ),
+            ),
+
+            // Chat Input bar
+            Container(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 8,
+                top: 4,
+                bottom: 4 + MediaQuery.of(context).viewInsets.bottom * 0.05,
+              ),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _chatInputController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendChatMessage(notifier),
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: AppTheme.primaryColor, size: 20),
+                    onPressed: () => _sendChatMessage(notifier),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatBubble(ChatMessage msg, bool isSelf) {
+    final bubbleColor = isSelf 
+        ? AppTheme.primaryColor.withOpacity(0.18) 
+        : Colors.white.withOpacity(0.06);
+    final align = isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final bubbleAlign = isSelf ? MainAxisAlignment.end : MainAxisAlignment.start;
+    final timeStr = _formatTimestamp(msg.timestamp);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        mainAxisAlignment: bubbleAlign,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(14),
+                  topRight: const Radius.circular(14),
+                  bottomLeft: Radius.circular(isSelf ? 14 : 3),
+                  bottomRight: Radius.circular(isSelf ? 3 : 14),
+                ),
+                border: Border.all(
+                  color: isSelf 
+                      ? AppTheme.primaryColor.withOpacity(0.3) 
+                      : Colors.white.withOpacity(0.04),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: align,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    msg.content,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    timeStr,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.35),
+                      fontSize: 8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimestamp(int ms) {
+    try {
+      final date = DateTime.fromMillisecondsSinceEpoch(ms);
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  void _openChatPanel() {
+    setState(() {
+      _isChatPanelOpen = true;
+    });
+    ref.read(spotMeProvider.notifier).setChatOpen(true);
+    _scrollToBottom();
+  }
+
+  void _sendChatMessage(SpotMeNotifier notifier) {
+    final text = _chatInputController.text.trim();
+    if (text.isEmpty) return;
+    notifier.sendChatMessage(text);
+    _chatInputController.clear();
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollController.hasClients) {
+        _chatScrollController.animateTo(
+          _chatScrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 }

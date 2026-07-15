@@ -9,6 +9,7 @@ use crate::models::{
     MessageFrame, UserOnlinePayload, OnlineUsersListPayload,
     ShareRequestIncomingPayload, ShareAcceptedPayload, ShareEndedPayload
 };
+use crate::db::Db;
 
 pub type WsTx = tokio::sync::mpsc::UnboundedSender<Message>;
 
@@ -34,10 +35,11 @@ pub struct AppStateInner {
 #[derive(Clone)]
 pub struct AppState {
     pub inner: Arc<RwLock<AppStateInner>>,
+    pub db: Db,
 }
 
 impl AppState {
-    pub fn new() -> Self {
+    pub fn new(db: Db) -> Self {
         Self {
             inner: Arc::new(RwLock::new(AppStateInner {
                 users: HashMap::new(),
@@ -45,6 +47,7 @@ impl AppState {
                 active_shares: HashMap::new(),
                 pending_requests: HashSet::new(),
             })),
+            db,
         }
     }
 
@@ -360,5 +363,69 @@ impl AppState {
 
             info!("Active sharing ended between {} and {}", user_id, target_id);
         }
+    }
+
+    pub async fn send_chat_message(&self, sender_id: String, receiver_id: String, content: String) {
+        let msg_id = uuid::Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+
+        let db_msg = crate::db::ChatMessage {
+            id: msg_id.clone(),
+            sender_id: sender_id.clone(),
+            receiver_id: receiver_id.clone(),
+            content: content.clone(),
+            timestamp,
+        };
+
+        // Save to SQLite database
+        if let Err(e) = self.db.save_message(db_msg) {
+            error!("Failed to save chat message to DB: {}", e);
+        }
+
+        // Forward to receiver
+        let state = self.inner.read().await;
+        let chat_frame = MessageFrame {
+            r#type: "chat_message".to_string(),
+            payload: json!({
+                "id": msg_id,
+                "sender_id": sender_id,
+                "receiver_id": receiver_id.clone(),
+                "content": content,
+                "timestamp": timestamp,
+            }),
+        };
+
+        Self::send_to_user_raw(&state.connections, &receiver_id, &chat_frame);
+    }
+
+    pub async fn fetch_chat_history(&self, user_id: String, partner_id: String, limit: usize) {
+        let history = match self.db.get_chat_history(&user_id, &partner_id, limit) {
+            Ok(messages) => messages,
+            Err(e) => {
+                error!("Failed to fetch chat history from DB: {}", e);
+                Vec::new()
+            }
+        };
+
+        let payload_messages: Vec<serde_json::Value> = history.into_iter().map(|msg| {
+            json!({
+                "id": msg.id,
+                "sender_id": msg.sender_id,
+                "receiver_id": msg.receiver_id,
+                "content": msg.content,
+                "timestamp": msg.timestamp,
+            })
+        }).collect();
+
+        let state = self.inner.read().await;
+        let history_frame = MessageFrame {
+            r#type: "chat_history".to_string(),
+            payload: json!({
+                "partner_id": partner_id,
+                "messages": payload_messages,
+            }),
+        };
+
+        Self::send_to_user_raw(&state.connections, &user_id, &history_frame);
     }
 }
